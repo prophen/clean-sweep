@@ -1,0 +1,9 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { scoreRun, initialProfile, levelFor, dateInZone } from '../lib/game';
+test('first run sets baseline and earns first-day XP, not a PB bonus',()=>{ const r=scoreRun(initialProfile,null,120,'2026-10-07'); assert.equal(r.first_run,true); assert.equal(r.beat_pb,false); assert.equal(r.xp_earned,75); assert.equal(r.best_seconds,120); assert.equal(r.profile.current_streak_days,1); });
+test('PB and same-day scoring preserve streak',()=>{ const p={...initialProfile,total_xp:150,current_streak_days:3,last_run_date:'2026-10-07'}; const r=scoreRun(p,120,100,'2026-10-07'); assert.equal(r.xp_earned,100); assert.equal(r.profile.current_streak_days,3); assert.equal(r.delta,-20); assert.equal(r.level_up,true); });
+test('ties do not beat a personal best',()=>{ const r=scoreRun({...initialProfile,last_run_date:'2026-10-07'},100,100,'2026-10-07'); assert.equal(r.beat_pb,false); assert.equal(r.xp_earned,50); });
+test('consecutive days continue streak; skipped days reset; longest survives',()=>{ const p={...initialProfile,current_streak_days:7,longest_streak_days:10,last_run_date:'2026-10-06'}; assert.equal(scoreRun(p,100,110,'2026-10-07').profile.current_streak_days,8); const r=scoreRun(p,100,110,'2026-10-08'); assert.equal(r.profile.current_streak_days,1); assert.equal(r.profile.longest_streak_days,10); });
+test('calendar boundaries handle months, leap days and player timezone',()=>{ const p={...initialProfile,current_streak_days:1,last_run_date:'2024-02-29'}; assert.equal(scoreRun(p,null,20,'2024-03-01').profile.current_streak_days,2); assert.equal(dateInZone(new Date('2026-10-08T02:00:00Z'),'America/Los_Angeles'),'2026-10-07'); });
+test('level thresholds include levels above six',()=>{ for(const [xp,level] of [[0,1],[199,1],[200,2],[500,3],[1000,4],[1750,5],[2750,6],[4000,7]]) assert.equal(levelFor(xp),level); });
