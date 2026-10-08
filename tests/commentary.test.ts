@@ -34,3 +34,22 @@ test('PB improvements and ties have explicit finished outcomes', () => {
  assert.equal(commentaryContext('finish_miss', record, 296, 1).outcome, 'personal_best_tied');
  assert.equal(commentaryContext('halfway', record, 180, 1).run_finished, false);
 });
+
+test('kitchen introduction preserves twelve-minute par even when AI invents seven', async () => {
+ const { composeCommentary } = await import('../lib/commentary');
+ const context = commentaryContext('run_start', chores[0], 0, 1);
+ const wrong = composeCommentary(context, 'Diving in with seven minutes to par!');
+ assert.match(wrong.text, /par is 12 minutes/);
+ assert.doesNotMatch(wrong.text, /seven/);
+ assert.equal(wrong.generated, false);
+ const valid = composeCommentary(context, 'The crowd is ready. Let’s make this place shine!');
+ assert.match(valid.text, /par is 12 minutes/);
+ assert.match(valid.text, /The crowd is ready/);
+ assert.equal(valid.generated, true);
+});
+test('remaining time is calculated, including delayed final-push events', async () => {
+ const { commentaryFacts } = await import('../lib/commentary');
+ assert.equal(commentaryFacts(commentaryContext('halfway', chores[0], 360, 1)), '6 minutes remaining before par.');
+ assert.equal(commentaryFacts(commentaryContext('final_push', chores[0], 695, 1)), '25 seconds remaining before par.');
+ assert.equal(commentaryFacts(commentaryContext('final_push', chores[0], 725, 1)), '5 seconds past par.');
+});

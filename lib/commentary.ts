@@ -32,3 +32,32 @@ export function fallback(event: Event, chore: Chore, elapsed: number, streak: nu
  if (persona === 'drill') return ({ run_start: `${chore.name}! Target ${target}! ${best === null ? 'Set your baseline.' : `Record ${formatTime(best)}.`} Move with purpose!`, halfway: 'Halfway to par! Stay steady. One corner at a time!', final_push: 'Thirty seconds to par! Finish strong, recruit!', finish_pb: `New record! ${formatTime(elapsed)}! Outstanding effort!`, finish_miss: `${formatTime(elapsed)}! Mission complete. Next time we sharpen that split!`, streak_milestone: `${streak} days of showing up! That is discipline!` })[event];
  return lines[event];
 }
+
+export function spokenDuration(seconds: number) {
+ const minutes = Math.floor(seconds / 60);
+ const remainder = seconds % 60;
+ return [minutes ? `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}` : '', remainder || !minutes ? `${remainder} ${remainder === 1 ? 'second' : 'seconds'}` : ''].filter(Boolean).join(' and ');
+}
+
+export function commentaryFacts(context: ReturnType<typeof commentaryContext>) {
+ const elapsed = spokenDuration(context.elapsed_seconds);
+ const remaining = context.par_seconds - context.elapsed_seconds;
+ switch (context.event) {
+  case 'run_start': return `${context.chore}: par is ${spokenDuration(context.par_seconds)}${context.personal_best_seconds === null ? '; this run sets your baseline' : `; your personal best is ${spokenDuration(context.personal_best_seconds)}`}.`;
+  case 'halfway':
+  case 'final_push': return remaining > 0 ? `${spokenDuration(remaining)} remaining before par.` : remaining === 0 ? 'Par time reached.' : `${spokenDuration(-remaining)} past par.`;
+  case 'finish_baseline': return `Baseline set at ${elapsed}${remaining > 0 ? `; ${spokenDuration(remaining)} under par` : remaining === 0 ? '; right on par' : `; ${spokenDuration(-remaining)} over par`}.`;
+  case 'finish_pb': return `New personal best of ${elapsed}; ${spokenDuration(context.seconds_faster_than_previous_best ?? 0)} faster.`;
+  case 'finish_miss': return context.outcome === 'personal_best_tied' ? `Finished in ${elapsed}; you matched your personal best.` : `Finished in ${elapsed}; ${spokenDuration(Math.abs(context.seconds_faster_than_previous_best ?? 0))} off your personal best.`;
+  case 'streak_milestone': return `${context.streak} days in a row.`;
+ }
+}
+
+// The model supplies personality only. Timing and records are calculated by the app.
+export const flavorRules = 'Write only one short encouragement or celebration sentence with no facts, quantities, numbers, timing, par, pace, records, streak lengths, or claims about visible cleanliness. Do not repeat or rewrite the supplied factual_line; the app prepends it unchanged. Use no stage directions. Do not imply an unfinished run when run_finished is true.';
+export function composeCommentary(context: ReturnType<typeof commentaryContext>, candidate?: string) {
+ const line = candidate?.trim();
+ const safe = !!line && line.length <= 240 && !/\d|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|hundred|thousand|half|quarter|minute\w*|second\w*|hour\w*|par|pace|record\w*|best|streak|ahead|behind|faster|slower)\b/i.test(line);
+ const encouragement = context.run_finished ? 'The mess lost today. Take that victory lap!' : 'Let’s bring the energy and make this place shine!';
+ return { text: `${commentaryFacts(context)} ${safe ? line : encouragement}`, generated: safe };
+}
