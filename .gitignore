@@ -4,3 +4,6 @@ node_modules
 !.env.example
 .data
 *.tsbuildinfo
+
+# Local HyperFrames video projects and renders
+/videos/

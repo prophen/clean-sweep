@@ -41,6 +41,7 @@ export default function Home() {
  const audioContext = useRef<AudioContext | null>(null);
  const source = useRef<AudioBufferSourceNode | null>(null);
  const audioQueue = useRef(Promise.resolve());
+ const commentaryHistory = useRef<string[]>([]);
  const wake = useRef<WakeLockSentinel | null>(null);
  const selectedRef = useRef<Chore | null>(null);
  const personaRef = useRef('hype');
@@ -77,8 +78,9 @@ export default function Home() {
  if(version!==epoch.current) return;
  let line = fallback(event,{...chore,best_seconds:prior===undefined?chore.best_seconds:prior},time,profileRef.current.current_streak_days,currentPersona);
  let audio: string | null = null;
- try { const data = await json('/api/commentary',{event,chore_id:chore.id,persona_id:currentPersona,elapsed:time,previous_best:prior,audio:!muteRef.current}); line=data.text; audio=data.audio_url; } catch { /* Local line is always available. */ }
+ try { const data = await json('/api/commentary',{event,chore_id:chore.id,persona_id:currentPersona,elapsed:time,previous_best:prior,previous_commentary:commentaryHistory.current,audio:!muteRef.current}); line=data.text; audio=data.audio_url; } catch { /* Local line is always available. */ }
  if(version!==epoch.current) return;
+ commentaryHistory.current = [...commentaryHistory.current, line].slice(-4);
  setCaptions(c=>[...c,{text:line,time}]);
  if(audio && !muteRef.current) await playAudio(audio,version); else setAudioStatus(muteRef.current?'Voice muted':'Captions only · voice not connected');
  }); audioQueue.current=task; return task;
@@ -96,7 +98,7 @@ export default function Home() {
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[screen,starting,countdown,saving]);
  async function start(chore: Chore) {
- epoch.current++; source.current?.stop(); audioQueue.current=Promise.resolve();
+ epoch.current++; source.current?.stop(); audioQueue.current=Promise.resolve(); commentaryHistory.current=[];
  try { audioContext.current ??= new AudioContext(); await audioContext.current.resume(); } catch { setAudioStatus('Captions only'); }
  selectedRef.current=chore; setSelected(chore); setScreen('run'); setElapsed(0); setCaptions([]); setResult(null); setError(''); setAbandon(false); frozenDuration.current=null; fired.current=new Set(); runId.current=crypto.randomUUID(); setStarting(true);
  const version=epoch.current;
@@ -112,7 +114,7 @@ export default function Home() {
  },[countdown,acquireWake]);
  async function finish() {
  if(saving || !selected) return;
- const duration=frozenDuration.current ?? Math.max(1,Math.floor((Date.now()-startedAt.current)/1000)); frozenDuration.current=duration; running.current=false; setElapsed(duration); setSaving(true); releaseWake(); epoch.current++; source.current?.stop(); audioQueue.current=Promise.resolve();
+ const duration=frozenDuration.current ?? Math.max(1,Math.floor((Date.now()-startedAt.current)/1000)); frozenDuration.current=duration; running.current=false; setElapsed(duration); setSaving(true); releaseWake(); epoch.current++; source.current?.stop(); audioQueue.current=Promise.resolve(); commentaryHistory.current=[];
  try { const data: Result=await json('/api/runs/finish',{chore_id:selected.id,duration_seconds:duration,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,request_id:runId.current}); setResult(data); setProfile(data.profile); setScreen('results'); setCaptions([]); setError(''); void announce(finishEvent(data.first_run,data.beat_pb),duration,data.previous_best); void load(); } catch(e) { setError((e as Error).message); } finally { setSaving(false); }
  }
  function mute() { const value=!muted; setMuted(value); muteRef.current=value; if(value) source.current?.stop(); }

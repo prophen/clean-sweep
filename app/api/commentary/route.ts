@@ -11,10 +11,11 @@ export async function POST(request: Request) {
  // Finish context uses the prior PB so the celebration can describe the improvement.
  if (body.event.startsWith('finish_') && (body.previous_best === null || (Number.isInteger(body.previous_best) && body.previous_best > 0 && body.previous_best <= 86400))) chore.best_seconds = body.previous_best;
  const context = commentaryContext(body.event as Event, chore, body.elapsed, data.profile.current_streak_days);
- let { text, generated } = composeCommentary(context);
+ const previous = Array.isArray(body.previous_commentary) ? body.previous_commentary.filter((line: unknown): line is string => typeof line === 'string').slice(-4).map((line: string) => line.slice(0, 600)) : [];
+ let { text, generated } = composeCommentary(context, undefined, previous);
  if (process.env.OPENAI_API_KEY) try {
- const response = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(8000), headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', max_completion_tokens: 120, messages: [{ role: 'system', content: `${persona.system_prompt} ${commentaryRules} ${flavorRules}` }, { role: 'user', content: JSON.stringify({ ...context, factual_line: commentaryFacts(context) }) }] }) });
- if (response.ok) { const output = await response.json(); const line = output.choices?.[0]?.message?.content?.trim(); if (line) { ({ text, generated } = composeCommentary(context, line)); } }
+ const response = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(8000), headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', max_completion_tokens: 120, messages: [{ role: 'system', content: `${persona.system_prompt} ${commentaryRules} ${flavorRules}` }, { role: 'user', content: JSON.stringify({ ...context, factual_line: commentaryFacts(context), previous_commentary: previous, instruction: "Use fresh phrasing; do not repeat encouragement from previous_commentary." }) }] }) });
+ if (response.ok) { const output = await response.json(); const line = output.choices?.[0]?.message?.content?.trim(); if (line) { ({ text, generated } = composeCommentary(context, line, previous)); } }
  } catch { /* Deterministic captions keep the event working. */ }
  let audio_url: string | null = null;
  if (process.env.DEEPGRAM_API_KEY && body.audio !== false) try {

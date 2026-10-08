@@ -53,3 +53,22 @@ test('remaining time is calculated, including delayed final-push events', async 
  assert.equal(commentaryFacts(commentaryContext('final_push', chores[0], 695, 1)), '25 seconds remaining before par.');
  assert.equal(commentaryFacts(commentaryContext('final_push', chores[0], 725, 1)), '5 seconds past par.');
 });
+
+test('fallback encouragement changes between start, halfway, and final push', async () => {
+ const { composeCommentary } = await import('../lib/commentary');
+ const start = composeCommentary(commentaryContext('run_start', vacuum, 0, 1));
+ const halfway = composeCommentary(commentaryContext('halfway', vacuum, 180, 1), undefined, [start.text]);
+ const final = composeCommentary(commentaryContext('final_push', vacuum, 330, 1), undefined, [start.text, halfway.text]);
+ assert.match(start.text, /bring the energy/);
+ assert.doesNotMatch(halfway.text, /bring the energy/);
+ assert.doesNotMatch(final.text, /bring the energy|Keep that rhythm/);
+ assert.match(halfway.text, /3 minutes remaining/);
+});
+
+test('repeated generated encouragement falls back to fresh wording', async () => {
+ const { composeCommentary } = await import('../lib/commentary');
+ const context = commentaryContext('halfway', vacuum, 180, 1);
+ const result = composeCommentary(context, 'Let’s bring the energy and make this place shine!', ['Par is six minutes. Let’s bring the energy and make this place shine!']);
+ assert.equal(result.generated, false);
+ assert.doesNotMatch(result.text, /bring the energy/);
+});

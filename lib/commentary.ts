@@ -55,9 +55,20 @@ export function commentaryFacts(context: ReturnType<typeof commentaryContext>) {
 
 // The model supplies personality only. Timing and records are calculated by the app.
 export const flavorRules = 'Write only one short encouragement or celebration sentence with no facts, quantities, numbers, timing, par, pace, records, streak lengths, or claims about visible cleanliness. Do not repeat or rewrite the supplied factual_line; the app prepends it unchanged. Use no stage directions. Do not imply an unfinished run when run_finished is true.';
-export function composeCommentary(context: ReturnType<typeof commentaryContext>, candidate?: string) {
+export function composeCommentary(context: ReturnType<typeof commentaryContext>, candidate?: string, previous: string[] = []) {
  const line = candidate?.trim();
- const safe = !!line && line.length <= 240 && !/\d|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|hundred|thousand|half|quarter|minute\w*|second\w*|hour\w*|par|pace|record\w*|best|streak|ahead|behind|faster|slower)\b/i.test(line);
- const encouragement = context.run_finished ? 'The mess lost today. Take that victory lap!' : 'Let’s bring the energy and make this place shine!';
+ const normalize = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+ const repeated = !!line && previous.some(text => normalize(text).includes(normalize(line)));
+ const safe = !!line && !repeated && line.length <= 240 && !/\d|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|hundred|thousand|half|quarter|minute\w*|second\w*|hour\w*|par|pace|record\w*|best|streak|ahead|behind|faster|slower)\b/i.test(line);
+ const encouragements: Record<Event, string[]> = {
+  run_start: ['Let’s bring the energy and make this place shine!', 'Your arena awaits. Let’s get moving!'],
+  halfway: ['Keep that rhythm going. You’ve got this!', 'Stay steady and keep moving!'],
+  final_push: ['Bring it home. Finish strong!', 'Keep your focus all the way to the finish!'],
+  finish_baseline: ['Your benchmark is set. Take that victory lap!', 'An opening performance worth celebrating!'],
+  finish_pb: ['Take a bow. That deserves a celebration!', 'What a performance. Enjoy your victory lap!'],
+  finish_miss: ['The mess lost today. Take that victory lap!', 'Mission complete. Enjoy the win!'],
+  streak_milestone: ['Keep showing up. That’s dedication!', 'Your consistency deserves applause!'],
+ };
+ const encouragement = encouragements[context.event].find(text => !previous.some(prior => normalize(prior).includes(normalize(text)))) ?? 'Bravo!';
  return { text: `${commentaryFacts(context)} ${safe ? line : encouragement}`, generated: safe };
 }
